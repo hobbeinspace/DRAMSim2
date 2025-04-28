@@ -95,21 +95,29 @@ void Rank::receiveFromBus(BusPacket *packet)
 	{
 	case READ:
 		//make sure a read is allowed
-		if (bankStates[packet->bank].currentBankState != RowActive ||
-		        currentClockCycle < bankStates[packet->bank].nextRead ||
-		        packet->row != bankStates[packet->bank].openRowAddress)
+		if (bankStates[packet->bank].currentBankState != RowActive || /// read is allowed in a bank if 1. a row is open for access AND
+		        currentClockCycle < bankStates[packet->bank].nextRead || ///timing constraint allows read access AND
+		        packet->row != bankStates[packet->bank].openRowAddress) ///read address matches open row address
 		{
 			packet->print();
 			ERROR("== Error - Rank " << id << " received a READ when not allowed");
 			exit(0);
 		}
 
-		//update state table
+		//update state table 
+		/// update nextPrecharge time (AL+BL/2+ max(tRTP,tCCD)-tCCD) additive latency + time to receive data + minimum time to wait after READ before PRECHARGE is allowed 
+		/// - tCCD because we already waited tCCD when READing data (unclear)
 		bankStates[packet->bank].nextPrecharge = max(bankStates[packet->bank].nextPrecharge, currentClockCycle + READ_TO_PRE_DELAY);
+
+
 		for (size_t i=0;i<NUM_BANKS;i++)
 		{
-			bankStates[i].nextRead = max(bankStates[i].nextRead, currentClockCycle + max(tCCD, BL/2));
-			bankStates[i].nextWrite = max(bankStates[i].nextWrite, currentClockCycle + READ_TO_WRITE_DELAY);
+			bankStates[i].nextRead = max(bankStates[i].nextRead, currentClockCycle + max(tCCD, BL/2)); ///update next read time = tCCD + data transfer time
+
+			///(RL+BL/2+tRTRS-WL)
+			///READ latency (tCL+AL) + BL/2 + rank-to-rank switch time(in this case, time to change data bus from read to write; necessary to avoid bus contention)
+			///-WL ?? (unclear)
+			bankStates[i].nextWrite = max(bankStates[i].nextWrite, currentClockCycle + READ_TO_WRITE_DELAY); 
 		}
 
 		//get the read data and put it in the storage which delays until the appropriate time (RL)
@@ -119,6 +127,10 @@ void Rank::receiveFromBus(BusPacket *packet)
 		packet->busPacketType = DATA;
 #endif
 		readReturnPacket.push_back(packet);
+		///we assume data is returned and READ can be completed after tCL (+tAL) cycles
+		///readReturnPacket and readReturnCountdown are queues for read data waiting to be sent back to the memory controller. 
+		///Packet has actual packets storead in queue and Countdown has the number of cycles until the data is sent back to the memory controller
+		///Rank::update() will check the countdown and send the data back to the memory controller when countdown is 0
 		readReturnCountdown.push_back(RL);
 		break;
 	case READ_P:
@@ -133,6 +145,7 @@ void Rank::receiveFromBus(BusPacket *packet)
 
 		//update state table
 		bankStates[packet->bank].currentBankState = Idle;
+		//(AL+tRTP+tRP) read-to-precharge delay + time it takes to precharge
 		bankStates[packet->bank].nextActivate = max(bankStates[packet->bank].nextActivate, currentClockCycle + READ_AUTOPRE_DELAY);
 		for (size_t i=0;i<NUM_BANKS;i++)
 		{
@@ -153,6 +166,7 @@ void Rank::receiveFromBus(BusPacket *packet)
 		break;
 	case WRITE:
 		//make sure a write is allowed
+		///same as case READ except we check for the nextWrite timing
 		if (bankStates[packet->bank].currentBankState != RowActive ||
 		        currentClockCycle < bankStates[packet->bank].nextWrite ||
 		        packet->row != bankStates[packet->bank].openRowAddress)
@@ -163,9 +177,13 @@ void Rank::receiveFromBus(BusPacket *packet)
 		}
 
 		//update state table
+		///(WL+BL/2+tWR)
+		///time from WRITE command to data on DQ + time for data transfer + write recovery time (last write data on DQ to ACT command)
 		bankStates[packet->bank].nextPrecharge = max(bankStates[packet->bank].nextPrecharge, currentClockCycle + WRITE_TO_PRE_DELAY);
 		for (size_t i=0;i<NUM_BANKS;i++)
 		{
+			///(WL+BL/2+tWTR) 
+			///time from WRITE command to data on DQ + time for data transfer + WRITE-to-READ delay (note tWTR is a rank level timing)
 			bankStates[i].nextRead = max(bankStates[i].nextRead, currentClockCycle + WRITE_TO_READ_DELAY_B);
 			bankStates[i].nextWrite = max(bankStates[i].nextWrite, currentClockCycle + max(BL/2, tCCD));
 		}
@@ -188,6 +206,8 @@ void Rank::receiveFromBus(BusPacket *packet)
 
 		//update state table
 		bankStates[packet->bank].currentBankState = Idle;
+		///(WL+BL/2+tWR+tRP) time until data transfer is over + time to close row + write recovery time
+		///chronogically, (WL+BL/2+tRP+tWR) would be more readable
 		bankStates[packet->bank].nextActivate = max(bankStates[packet->bank].nextActivate, currentClockCycle + WRITE_AUTOPRE_DELAY);
 		for (size_t i=0;i<NUM_BANKS;i++)
 		{
@@ -203,6 +223,7 @@ void Rank::receiveFromBus(BusPacket *packet)
 		break;
 	case ACTIVATE:
 		//make sure activate is allowed
+		///check if rows are closed + check if it meets timing constraint
 		if (bankStates[packet->bank].currentBankState != Idle ||
 		        currentClockCycle < bankStates[packet->bank].nextActivate)
 		{
@@ -217,8 +238,10 @@ void Rank::receiveFromBus(BusPacket *packet)
 		bankStates[packet->bank].openRowAddress = packet->row;
 
 		//if AL is greater than one, then posted-cas is enabled - handle accordingly
+		///redundant if-else block (unclear)
 		if (AL>0)
 		{
+
 			bankStates[packet->bank].nextWrite = currentClockCycle + (tRCD-AL);
 			bankStates[packet->bank].nextRead = currentClockCycle + (tRCD-AL);
 		}
@@ -240,6 +263,7 @@ void Rank::receiveFromBus(BusPacket *packet)
 		break;
 	case PRECHARGE:
 		//make sure precharge is allowed
+		///check if a row is + check if it meets timing constraint
 		if (bankStates[packet->bank].currentBankState != RowActive ||
 		        currentClockCycle < bankStates[packet->bank].nextPrecharge)
 		{
@@ -255,6 +279,7 @@ void Rank::receiveFromBus(BusPacket *packet)
 		refreshWaiting = false;
 		for (size_t i=0;i<NUM_BANKS;i++)
 		{
+			//make sure all rows are closed before issuing a refresh
 			if (bankStates[i].currentBankState != Idle)
 			{
 				ERROR("== Error - Rank " << id << " received a REF when not allowed");
@@ -296,7 +321,7 @@ int Rank::getId() const
 	return this->id;
 }
 
-void Rank::update()
+void Rank::update()///update is called in MemorySystem
 {
 
 	// An outgoing packet is one that is currently sending on the bus
@@ -307,12 +332,14 @@ void Rank::update()
 		if (dataCyclesLeft == 0)
 		{
 			//if the packet is done on the bus, call receiveFromBus and free up the bus
+			///a MemoryController member function. Adds the received packet to the read data queue
 			memoryController->receiveFromBus(outgoingDataPacket);
 			outgoingDataPacket = NULL;
 		}
 	}
 
 	// decrement the counter for all packets waiting to be sent back
+
 	for (size_t i=0;i<readReturnCountdown.size();i++)
 	{
 		readReturnCountdown[i]--;
@@ -325,6 +352,7 @@ void Rank::update()
 		// ready to go out on the bus
 
 		outgoingDataPacket = readReturnPacket[0];
+		///start transferring data on bus. It will take BL/2 cycles to transfer the data
 		dataCyclesLeft = BL/2;
 
 		// remove the packet from the ranks
@@ -347,12 +375,14 @@ void Rank::powerDown()
 	//perform checks
 	for (size_t i=0;i<NUM_BANKS;i++)
 	{
+		///we have no checks for tCKE or the necessary logic to perform the check
+		///tCKE applies for both power down and power up
 		if (bankStates[i].currentBankState != Idle)
 		{
 			ERROR("== Error - Trying to power down rank " << id << " while not all banks are idle");
 			exit(0);
 		}
-
+		///tCKE: time to wait after setting the clock enable signal to low or high
 		bankStates[i].nextPowerUp = currentClockCycle + tCKE;
 		bankStates[i].currentBankState = PowerDown;
 	}
@@ -363,6 +393,7 @@ void Rank::powerDown()
 //power up the rank
 void Rank::powerUp()
 {
+	
 	if (!isPowerDown)
 	{
 		ERROR("== Error - Trying to power up rank " << id << " while it is not already powered down");
@@ -370,15 +401,17 @@ void Rank::powerUp()
 	}
 
 	isPowerDown = false;
-
+	
 	for (size_t i=0;i<NUM_BANKS;i++)
 	{
+		///tCKE check
 		if (bankStates[i].nextPowerUp > currentClockCycle)
 		{
 			ERROR("== Error - Trying to power up rank " << id << " before we're allowed to");
 			ERROR(bankStates[i].nextPowerUp << "    " << currentClockCycle);
 			exit(0);
 		}
+		///tXP: minimum number of clock cycles required after exiting power-down mode before the memory can accept any valid command
 		bankStates[i].nextActivate = currentClockCycle + tXP;
 		bankStates[i].currentBankState = Idle;
 	}

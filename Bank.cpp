@@ -61,7 +61,7 @@ Bank::Bank(ostream &dramsim_log_):
  *	TODO: if anyone wants to actually store data, see the 'data_storage' branch and perhaps try to merge that into master
  */
 
-
+///from my understanding this linked list implementation of banks is to save space
 
 Bank::DataStruct *Bank::searchForRow(unsigned row, DataStruct *head)
 {
@@ -94,10 +94,12 @@ void Bank::read(BusPacket *busPacket)
 	}
 	else // found it
 	{
+		///column is not specified for READ
 		busPacket->data = foundNode->data;
 	}
 
 	//the return packet should be a data packet, not a read packet
+	///rank behavior for DATA is not implemented yet
 	busPacket->busPacketType = DATA;
 }
 

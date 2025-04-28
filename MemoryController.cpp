@@ -111,6 +111,8 @@ MemoryController::MemoryController(MemorySystem *parent, CSVWriter &csvOut_, ost
 }
 
 //get a bus packet from either data or cmd bus
+///called by Rank::update() when a packet is finally done transmitting on the bus. 
+///called after last data on DQ
 void MemoryController::receiveFromBus(BusPacket *bpacket)
 {
 	if (bpacket->busPacketType != DATA)
@@ -127,7 +129,12 @@ void MemoryController::receiveFromBus(BusPacket *bpacket)
 	}
 
 	//add to return read data queue
+	///returnTransaction is consumed when MemoryController::update()
+	///should match with pendingReadTransaction
 	returnTransaction.push_back(new Transaction(RETURN_DATA, bpacket->physicalAddress, bpacket->data));
+
+	///SEQUENTIAL(rank,bank) =  (rank*NUM_BANKS)+bank
+	///convert rank and bank to a single index for the vector
 	totalReadsPerBank[SEQUENTIAL(bpacket->rank,bpacket->bank)]++;
 
 	// this delete statement saves a mindboggling amount of memory
@@ -135,10 +142,12 @@ void MemoryController::receiveFromBus(BusPacket *bpacket)
 }
 
 //sends read data back to the CPU
+///called in MemoryController::update()
 void MemoryController::returnReadData(const Transaction *trans)
 {
 	if (parentMemorySystem->ReturnReadData!=NULL)
 	{
+		///callback function used by parentMemorySystem like MARSS
 		(*parentMemorySystem->ReturnReadData)(parentMemorySystem->systemID, trans->address, currentClockCycle);
 	}
 }
@@ -150,6 +159,8 @@ void MemoryController::attachRanks(vector<Rank *> *ranks)
 }
 
 //memory controller update
+///called in side MemorySystem::update(). MemorySystem::step() is also called with MemoryController::update()
+///which increments the memory controller clock cycle
 void MemoryController::update()
 {
 
@@ -168,6 +179,7 @@ void MemoryController::update()
 				//if counter has reached 0, change state
 				if (bankStates[i][j].stateChangeCountdown == 0)
 				{
+					///lastCommand is 
 					switch (bankStates[i][j].lastCommand)
 					{
 						//only these commands have an implicit state change
