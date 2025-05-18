@@ -112,7 +112,8 @@ void Rank::receiveFromBus(BusPacket *packet)
 
 		for (size_t i=0;i<NUM_BANKS;i++)
 		{
-			bankStates[i].nextRead = max(bankStates[i].nextRead, currentClockCycle + max(tCCD, BL/2)); ///update next read time = tCCD + data transfer time
+			 ///update next read time = tCCD + data transfer time
+			bankStates[i].nextRead = max(bankStates[i].nextRead, currentClockCycle + max(tCCD, BL/2));
 
 			///(RL+BL/2+tRTRS-WL)
 			///READ latency (tCL+AL) + BL/2 + rank-to-rank switch time(in this case, time to change data bus from read to write; necessary to avoid bus contention)
@@ -207,7 +208,7 @@ void Rank::receiveFromBus(BusPacket *packet)
 		//update state table
 		bankStates[packet->bank].currentBankState = Idle;
 		///(WL+BL/2+tWR+tRP) time until data transfer is over + time to close row + write recovery time
-		///chronogically, (WL+BL/2+tRP+tWR) would be more readable
+		///*tWR is bank level
 		bankStates[packet->bank].nextActivate = max(bankStates[packet->bank].nextActivate, currentClockCycle + WRITE_AUTOPRE_DELAY);
 		for (size_t i=0;i<NUM_BANKS;i++)
 		{
@@ -263,7 +264,7 @@ void Rank::receiveFromBus(BusPacket *packet)
 		break;
 	case PRECHARGE:
 		//make sure precharge is allowed
-		///check if a row is + check if it meets timing constraint
+		///check to make sure a row is not active before PRECHARGE + check if it meets timing constraint
 		if (bankStates[packet->bank].currentBankState != RowActive ||
 		        currentClockCycle < bankStates[packet->bank].nextPrecharge)
 		{
@@ -285,6 +286,7 @@ void Rank::receiveFromBus(BusPacket *packet)
 				ERROR("== Error - Rank " << id << " received a REF when not allowed");
 				exit(0);
 			}
+			///tRFC full refresh delay
 			bankStates[i].nextActivate = currentClockCycle + tRFC;
 		}
 		delete(packet); 
