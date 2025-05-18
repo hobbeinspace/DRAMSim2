@@ -36,13 +36,13 @@ namespace DRAMSim
 void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsigned &newTransactionRank, unsigned &newTransactionBank, unsigned &newTransactionRow, unsigned &newTransactionColumn)
 {
 	uint64_t tempA, tempB;
-	unsigned transactionSize = TRANSACTION_SIZE;
+	unsigned transactionSize = TRANSACTION_SIZE; ///JEDEC_DATA_BUS_BITS (=64) / 8 * BL (inireader.cpp)
 	uint64_t transactionMask =  transactionSize - 1; //ex: (64 bit bus width) x (8 Burst Length) - 1 = 64 bytes - 1 = 63 = 0x3f mask
-	unsigned channelBitWidth = NUM_CHANS_LOG;
-	unsigned rankBitWidth = NUM_RANKS_LOG;
-	unsigned bankBitWidth = NUM_BANKS_LOG;
-	unsigned rowBitWidth = NUM_ROWS_LOG;
-	unsigned colBitWidth = NUM_COLS_LOG;
+	unsigned channelBitWidth = NUM_CHANS_LOG; ///NUM_CHANS_LOG=log2(NUM_CHANS);
+	unsigned rankBitWidth = NUM_RANKS_LOG; ///NUM_RANKS_LOG=log2(NUM_RANKS);
+	unsigned bankBitWidth = NUM_BANKS_LOG;	 ///NUM_BANKS_LOG=log2(NUM_BANKS);
+	unsigned rowBitWidth = NUM_ROWS_LOG;	 ///NUM_ROWS_LOG=log2(NUM_ROWS);
+	unsigned colBitWidth = NUM_COLS_LOG;	 ///NUM_COLS_LOG=log2(NUM_COLS);
 	// this forces the alignment to the width of a single burst (64 bits = 8 bytes = 3 address bits for DDR parts)
 	unsigned byteOffsetWidth = BYTE_OFFSET_WIDTH;
 	// Since we're assuming that a request is for BL*BUS_WIDTH, the bottom bits
@@ -77,7 +77,14 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 	unsigned colLowBitWidth = COL_LOW_BIT_WIDTH;
 
 	physicalAddress >>= colLowBitWidth;
+
+	/// the remaining bits of the column address are the high bits of the column
+
+	///First shift: Removes the byte offset (for a burst).
+	///Second shift: Removes the lower column bits (for a transaction).
+
 	unsigned colHighBitWidth = colBitWidth - colLowBitWidth; 
+
 	if (DEBUG_ADDR_MAP)
 	{
 		DEBUG("Bit widths: ch:"<<channelBitWidth<<" r:"<<rankBitWidth<<" b:"<<bankBitWidth
@@ -87,6 +94,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 	}
 
 	//perform various address mapping schemes
+	///scheme 1 is the default address mapping scheme
 	if (addressMappingScheme == Scheme1)
 	{
 		//chan:rank:row:col:bank

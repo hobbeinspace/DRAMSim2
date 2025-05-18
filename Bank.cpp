@@ -62,6 +62,8 @@ Bank::Bank(ostream &dramsim_log_):
  */
 
 ///from my understanding this linked list implementation of banks is to save space
+///Each bank contains a vector called rowEntries, where each entry corresponds to a column.
+///Each rowEntries[column] (conceptually) is a linked list of DataStruct nodes, each representing a row in that column and holding a pointer to the data.
 
 Bank::DataStruct *Bank::searchForRow(unsigned row, DataStruct *head)
 {
