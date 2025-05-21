@@ -3,10 +3,20 @@
 using namespace std;
 
 
+///cock domain crosser to cross between DRAM clock and CPU clock
+///used in MultiChannelMemorySystem.cpp
+///in MultiChannelMemorySystem.cpp callback is acutal_update which performs
+///	for (size_t i=0; i<NUM_CHANS; i++)
+/// 	{
+/// 		channels[i]->update(); 
+/// 	}
+/// 	currentClockCycle++; 
+///so, callback performs channel update and increments DRAM clock.
 
 namespace ClockDomain
 {
 	// "Default" crosser with a 1:1 ratio
+	///"clock" means frequency here
 	ClockDomainCrosser::ClockDomainCrosser(ClockUpdateCB *_callback)
 		: callback(_callback), clock1(1UL), clock2(1UL), counter1(0UL), counter2(0UL)
 	{
@@ -21,7 +31,9 @@ namespace ClockDomain
 		: callback(_callback), counter1(0), counter2(0)
 	{
 		// Compute numerator and denominator for ratio, then pass that to other constructor.
+		///we're trying to approximate the ration given with a fraction clock1/clock2.
 		double x = ratio;
+
 
 		const int MAX_ITER = 15;
 		size_t i;
@@ -50,12 +62,19 @@ namespace ClockDomain
 		}
 
 		//printf("APPROXIMATION= %u/%d\n",ns[i],ds[i]);
+
+		///ns[]: Stores the numerator values at each iteration.
+		///ds[]: Stores the denominator values at each iteration.
+
 		this->clock1=ns[i];
 		this->clock2=ds[i];
 
 		//cout << "CTOR: callback address: " << (uint64_t)(this->callback) << "\t ratio="<<clock1<<"/"<<clock2<< endl;
 	}
-
+	/// update() is called in MultiChannelMemorySystem::update(). So, it is called every CPU clock cycle.
+	///ultimately it is called in TraceBasedSim, in main().
+	///update() calls the registered callback function (which is acutal_update) on every clock2. 
+	///ensures that the ratio between update() calls (CPU clock) and acutal_update() calls (DRAM clock) is clock1/clock2.
 	void ClockDomainCrosser::update()
 	{
 		//short circuit case for 1:1 ratios

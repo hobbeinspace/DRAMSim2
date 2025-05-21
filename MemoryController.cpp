@@ -159,7 +159,7 @@ void MemoryController::attachRanks(vector<Rank *> *ranks)
 }
 
 //memory controller update
-///called in side MemorySystem::update(). MemorySystem::step() is also called with MemoryController::update()
+///called inside MemorySystem::update(). MemorySystem::step() is also called with MemoryController::update()
 ///which increments the memory controller clock cycle
 void MemoryController::update()
 {
