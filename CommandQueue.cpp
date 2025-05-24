@@ -77,6 +77,7 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
 	}
 
 	//vector of counters used to ensure rows don't stay open too long
+	///keep track how many times rows have been accessed in each bank
 	rowAccessCounters = vector< vector<unsigned> >(NUM_RANKS, vector<unsigned>(NUM_BANKS,0));
 
 	//create queue based on the structure we want
@@ -101,7 +102,14 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
 	//
 	//countdown vector will have decrementing counters starting at tFAW
 	//  when the 0th element reaches 0, remove it
-	tFAWCountdown.reserve(NUM_RANKS);
+	///tFAW is a per rank constraint
+	///conceptually, each entry in the countdown vector is a counter that encodes cycles remaining for the "window" to pass over an ACTIVATE command.
+	///in turn, the number of entries in the countdown vector is the number of ACTIVATE commands issued in the last tFAW cycles.
+	///when issuing an ACTIVATE command, check wether the number of entries in the countdown vector is less than 4 or not.
+	
+	///each time ACTIVATE is issued, we add tFAW to countdown vector for a rank.
+	///each cycle, decrement all the counters in countdown vector, and remove any that reach 0.
+	tFAWCountdown.reserve(NUM_RANKS); 
 	for (size_t i=0;i<NUM_RANKS;i++)
 	{
 		//init the empty vectors here so we don't seg fault later
@@ -139,6 +147,7 @@ void CommandQueue::enqueue(BusPacket *newBusPacket)
 		{
 			ERROR("== Error - Enqueued more than allowed in command queue");
 			ERROR("						Need to call .hasRoomFor(int numberToEnqueue, unsigned rank, unsigned bank) first");
+			///TODO?
 			exit(0);
 		}
 	}
@@ -168,6 +177,10 @@ bool CommandQueue::pop(BusPacket **busPacket)
 	//
 	//deal with tFAW book-keeping
 	//	each rank has it's own counter since the restriction is on a device level
+
+	///four bank activation window, in cycles
+
+
 	for (size_t i=0;i<NUM_RANKS;i++)
 	{
 		//decrement all the counters we have going
