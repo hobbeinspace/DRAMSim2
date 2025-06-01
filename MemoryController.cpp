@@ -111,7 +111,7 @@ MemoryController::MemoryController(MemorySystem *parent, CSVWriter &csvOut_, ost
 }
 
 //get a bus packet from either data or cmd bus
-///called by Rank::update() when a packet is finally done transmitting on the bus. 
+///in case of read data, receiveFromBus is called by Rank::update() when a packet is finally done transmitting on the bus. 
 ///called after last data on DQ
 void MemoryController::receiveFromBus(BusPacket *bpacket)
 {
@@ -183,6 +183,7 @@ void MemoryController::update()
 					switch (bankStates[i][j].lastCommand)
 					{
 						//only these commands have an implicit state change
+						///Idle,RowActive,Precharging,Refreshing,PowerDown
 					case WRITE_P:
 					case READ_P:
 						bankStates[i][j].currentBankState = Precharging;
@@ -204,6 +205,8 @@ void MemoryController::update()
 
 
 	//check for outgoing command packets and handle countdowns
+	///rank::recieveFromBus() will handle the packet once it is ready
+	///if command was read or read_p then read data will be on rank.outgoingDataPacket
 	if (outgoingCmdPacket != NULL)
 	{
 		cmdCyclesLeft--;
@@ -295,6 +298,7 @@ void MemoryController::update()
 	//function returns true if there is something valid in poppedBusPacket
 	if (commandQueue.pop(&poppedBusPacket))
 	{
+		///writeDataToSend is handled and sent on bus to the corresponding rank (see above)
 		if (poppedBusPacket->busPacketType == WRITE || poppedBusPacket->busPacketType == WRITE_P)
 		{
 
@@ -324,6 +328,8 @@ void MemoryController::update()
 				{
 					//Don't bother setting next read or write times because the bank is no longer active
 					//bankStates[rank][bank].currentBankState = Idle;
+					///bankState[][].currentBankState handling was done with a separate code block (see above)
+					///
 					bankStates[rank][bank].nextActivate = max(currentClockCycle + READ_AUTOPRE_DELAY,
 							bankStates[rank][bank].nextActivate);
 					bankStates[rank][bank].lastCommand = READ_P;
@@ -346,7 +352,10 @@ void MemoryController::update()
 							//check to make sure it is active before trying to set (save's time?)
 							if (bankStates[i][j].currentBankState == RowActive)
 							{
+								///tRTRS is the Rank-to-Rank Switching Delay (Read-to-Read)
+								///this 
 								bankStates[i][j].nextRead = max(currentClockCycle + BL/2 + tRTRS, bankStates[i][j].nextRead);
+
 								bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY,
 										bankStates[i][j].nextWrite);
 							}

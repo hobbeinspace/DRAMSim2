@@ -224,11 +224,13 @@ bool CommandQueue::pop(BusPacket **busPacket)
 					for (size_t j=0;j<queue.size();j++)
 					{
 						BusPacket *packet = queue[j];
+						///if there is a command in the queue that is going to the open row
 						if (packet->row == bankStates[refreshRank][b].openRowAddress &&
 								packet->bank == b)
 						{
 							if (packet->busPacketType != ACTIVATE && isIssuable(packet))
 							{
+								///before issuing a refresh, send out the command that is going to the open row
 								*busPacket = packet;
 								queue.erase(queue.begin() + j);
 								sendingREF = true;
@@ -243,6 +245,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 				//				satisfied.	the next ACT and next REF can be issued at the same
 				//				point in the future, so just use nextActivate field instead of
 				//				creating a nextRefresh field
+				///when nextActivate timing is met, row is closed -> refresh is issuable
 				else if (bankStates[refreshRank][b].nextActivate > currentClockCycle)
 				{
 					foundActiveOrTooEarly = true;
@@ -285,6 +288,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 							if (isIssuable(queue[i]))
 							{
 								//check to make sure we aren't removing a read/write that is paired with an activate
+								///read/write packets paired with an activate means that the read/write cannot be issued by itself because the row is closed
 								if (i>0 && queue[i-1]->busPacketType==ACTIVATE &&
 										queue[i-1]->physicalAddress == queue[i]->physicalAddress)
 									continue;
@@ -296,13 +300,14 @@ bool CommandQueue::pop(BusPacket **busPacket)
 							}
 						}
 					}
-					else
+					else ///per-rank per-bank
 					{
 						if (isIssuable(queue[0]))
 						{
 
 							//no need to search because if the front can't be sent,
 							// then no chance something behind it can go instead
+							///with a per-rank per-bank structure, all packets are intended for the same bank. Therefore no need to search throught the entire queue
 							*busPacket = queue[0];
 							queue.erase(queue.begin());
 							foundIssuable = true;
@@ -325,6 +330,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 				}
 				else 
 				{
+					///depends on interleaving policy (rank-then-bank or bank-then-rank)
 					nextRankAndBank(nextRank, nextBank);
 					if (startingRank == nextRank && startingBank == nextBank)
 					{
@@ -332,7 +338,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 					}
 				}
 			}
-			while (true);
+			while (true); ///do-while
 
 			//if we couldn't find anything to send, return false
 			if (!foundIssuable) return false;
@@ -348,6 +354,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 			for (size_t b=0;b<NUM_BANKS;b++)
 			{
 				//if a bank is active we can't send a REF yet
+				///refreshRank is set by the memoryController
 				if (bankStates[refreshRank][b].currentBankState == RowActive)
 				{
 					sendREF = false;
@@ -385,6 +392,8 @@ bool CommandQueue::pop(BusPacket **busPacket)
 					}
 
 					//if the bank is open and we are allowed to close it, then send a PRE
+					///this was not needed with the closed row policy because that policy automatically closes rows after read
+					///this is not related to open or closed row policy, but rather to the fact that we need to close the open row in order to refresh the bank
 					if (closeRow && currentClockCycle >= bankStates[refreshRank][b].nextPrecharge)
 					{
 						rowAccessCounters[refreshRank][b]=0;
@@ -414,6 +423,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 			}
 		}
 
+		///if we are not sending a REF or a PRE`, then proceed as normal
 		if (!sendingREForPRE)
 		{
 			unsigned startingRank = nextRank;
@@ -436,6 +446,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 							for (size_t j=0;j<i;j++)
 							{
 								BusPacket *prevPacket = queue[j];
+								///the (== ACTIVATE) condition we had for the closed-row plolicy is not needed with open-row policy
 								if (prevPacket->busPacketType != ACTIVATE &&
 										prevPacket->bank == packet->bank &&
 										prevPacket->row == packet->row)
@@ -451,6 +462,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 							//if the bus packet before is an activate, that is the act that was
 							//	paired with the column access we are removing, so we have to remove
 							//	that activate as well (check i>0 because if i==0 then theres nothing before it)
+							///isIssuable checks if the row is open, so we can assume that the row is open
 							if (i>0 && queue[i-1]->busPacketType == ACTIVATE)
 							{
 								rowAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
@@ -548,6 +560,8 @@ bool CommandQueue::pop(BusPacket **busPacket)
 	//  posted-cas is enabled when AL>0
 	//  when sendAct is true, when don't want to increment our indexes
 	//  so we send the column access that is paid with this act
+	///related to posted-cas, which is a dram feature that allows controller to delay read/write so it can be issued before activate.
+	///if we are using posted cas, do not advance nexrRank or nextBank, so read/write command can be issued immediately after the activate
 	if (AL>0 && sendAct)
 	{
 		sendAct = false;
