@@ -79,7 +79,7 @@ Rank::~Rank()
 	readReturnPacket.clear(); 
 	delete outgoingDataPacket; 
 }
-void Rank::receiveFromBus(BusPacket *packet)
+void Rank::receiveFromBus(BusPacket *packet) //called by MemoryController::update()
 {
 	if (DEBUG_BUS)
 	{

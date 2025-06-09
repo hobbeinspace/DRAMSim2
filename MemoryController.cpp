@@ -296,6 +296,7 @@ void MemoryController::update()
 	//pass a pointer to a poppedBusPacket
 
 	//function returns true if there is something valid in poppedBusPacket
+	///pop a bus packet from the command queue and send it (with &outgoingCmdPacket)
 	if (commandQueue.pop(&poppedBusPacket))
 	{
 		///writeDataToSend is handled and sent on bus to the corresponding rank (see above)
@@ -329,7 +330,6 @@ void MemoryController::update()
 					//Don't bother setting next read or write times because the bank is no longer active
 					//bankStates[rank][bank].currentBankState = Idle;
 					///bankState[][].currentBankState handling was done with a separate code block (see above)
-					///
 					bankStates[rank][bank].nextActivate = max(currentClockCycle + READ_AUTOPRE_DELAY,
 							bankStates[rank][bank].nextActivate);
 					bankStates[rank][bank].lastCommand = READ_P;
@@ -350,10 +350,11 @@ void MemoryController::update()
 						if (i!=poppedBusPacket->rank)
 						{
 							//check to make sure it is active before trying to set (save's time?)
+							///update nexRead and nextWrite here (MemoryController::update()) instead of in rank::update()
+							///because reading is done by the MemoryController, it should handle tRTRS
 							if (bankStates[i][j].currentBankState == RowActive)
 							{
 								///tRTRS is the Rank-to-Rank Switching Delay (Read-to-Read)
-								///this 
 								bankStates[i][j].nextRead = max(currentClockCycle + BL/2 + tRTRS, bankStates[i][j].nextRead);
 
 								bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY,
@@ -362,6 +363,7 @@ void MemoryController::update()
 						}
 						else
 						{
+							///cas-to-cas
 							bankStates[i][j].nextRead = max(currentClockCycle + max(tCCD, BL/2), bankStates[i][j].nextRead);
 							bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY,
 									bankStates[i][j].nextWrite);
@@ -374,6 +376,7 @@ void MemoryController::update()
 					//set read and write to nextActivate so the state table will prevent a read or write
 					//  being issued (in cq.isIssuable())before the bank state has been changed because of the
 					//  auto-precharge associated with this command
+					///prevent a command from being issued before ACTIVATE
 					bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
 					bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
 				}
@@ -381,6 +384,7 @@ void MemoryController::update()
 				break;
 			case WRITE_P:
 			case WRITE:
+				///update bank states based on the command we're about to issue just like we did for READ and READ_P
 				if (poppedBusPacket->busPacketType == WRITE_P) 
 				{
 					bankStates[rank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
@@ -403,6 +407,8 @@ void MemoryController::update()
 				}
 				burstEnergy[rank] += (IDD4W - IDD3N) * BL/2 * NUM_DEVICES;
 
+
+				///repeated
 				for (size_t i=0;i<NUM_RANKS;i++)
 				{
 					for (size_t j=0;j<NUM_BANKS;j++)
@@ -428,6 +434,7 @@ void MemoryController::update()
 				//set read and write to nextActivate so the state table will prevent a read or write
 				//  being issued (in cq.isIssuable())before the bank state has been changed because of the
 				//  auto-precharge associated with this command
+				///repeated
 				if (poppedBusPacket->busPacketType == WRITE_P)
 				{
 					bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
@@ -458,6 +465,7 @@ void MemoryController::update()
 				{
 					if (i!=poppedBusPacket->bank)
 					{
+						///tRRD: row-to-row delay (rank level timing)
 						bankStates[rank][i].nextActivate = max(currentClockCycle + tRRD, bankStates[rank][i].nextActivate);
 					}
 				}
@@ -505,6 +513,17 @@ void MemoryController::update()
 			ERROR("== Error - Command Bus Collision");
 			exit(-1);
 		}
+
+		///finally issue the command on bus
+		///earlier in MemoryController::update()...
+		/*
+		cmdCyclesLeft--;
+		if (cmdCyclesLeft == 0) //packet is ready to be received by rank
+		{
+			(*ranks)[outgoingCmdPacket->rank]->receiveFromBus(outgoingCmdPacket);
+			outgoingCmdPacket = NULL;
+		}
+		*/
 		outgoingCmdPacket = poppedBusPacket;
 		cmdCyclesLeft = tCMD;
 
@@ -562,7 +581,21 @@ void MemoryController::update()
 					newTransactionBank, transaction->data, dramsim_log);
 
 
-
+			///issue ACT and CAS to access data.
+			///what if the row is already open? (only happens in open page policy)
+			///->this is handed by the CommandQueue::isIssuable() check
+			/*
+			if(isIssuable(packet)){
+			...
+				if (i>0 && queue[i-1]->busPacketType == ACTIVATE)
+				{
+					rowAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
+					delete (queue[i-1]);
+					ueue.erase(queue.begin()+i-1,queue.begin()+i+1);
+				}
+			
+			}
+			*/
 			commandQueue.enqueue(ACTcommand);
 			commandQueue.enqueue(command);
 
@@ -703,6 +736,7 @@ void MemoryController::update()
 				addressMapping(returnTransaction[0]->address,chan,rank,bank,row,col);
 				insertHistogram(currentClockCycle-pendingReadTransactions[i]->timeAdded,rank,bank);
 				//return latency
+				///send read data to parentMemorySystem (calls a callback function tied to the parentMemorySystem)
 				returnReadData(pendingReadTransactions[i]);
 
 				delete pendingReadTransactions[i];
@@ -786,6 +820,7 @@ bool MemoryController::WillAcceptTransaction()
 }
 
 //allows outside source to make request of memory system
+///called by MemorySystem::addTransaction() 
 bool MemoryController::addTransaction(Transaction *trans)
 {
 	if (WillAcceptTransaction())
