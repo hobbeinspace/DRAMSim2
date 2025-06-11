@@ -205,7 +205,7 @@ void MemoryController::update()
 
 
 	//check for outgoing command packets and handle countdowns
-	///rank::recieveFromBus() will handle the packet once it is ready
+	///rank::receiveFromBus() will handle the packet once it is ready
 	///if command was read or read_p then read data will be on rank.outgoingDataPacket
 	if (outgoingCmdPacket != NULL)
 	{
