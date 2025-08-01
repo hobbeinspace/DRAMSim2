@@ -43,9 +43,13 @@
 #include "CommandQueue.h"
 #include "MemoryController.h"
 #include <assert.h>
+#include <stdlib.h> 
+#include <ctime>
+#include <unistd.h>
 
+#define PARA_ACT_PACKET_PHYSADDR 99
 using namespace DRAMSim;
-
+#define DEBUG_PARA_PRINT(str) if(DEBUG_PARA) {std::cout<<str<<std::endl;}
 CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim_log_) :
 		dramsim_log(dramsim_log_),
 		bankStates(states),
@@ -181,6 +185,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 	///four bank activation window, in cycles
 
 
+	std::srand(std::time(nullptr)); //for PARA
 	for (size_t i=0;i<NUM_RANKS;i++)
 	{
 		//decrement all the counters we have going
@@ -289,9 +294,16 @@ bool CommandQueue::pop(BusPacket **busPacket)
 							{
 								//check to make sure we aren't removing a read/write that is paired with an activate
 								///read/write packets paired with an activate means that the read/write cannot be issued by itself because the row is closed
+								///but doesnt isIssuable() check for that is this a bug?
 								if (i>0 && queue[i-1]->busPacketType==ACTIVATE &&
 										queue[i-1]->physicalAddress == queue[i]->physicalAddress)
-									continue;
+										{
+											printf("PANIC should be impossible\n");
+											exit(0);
+											continue;
+										}
+
+								
 
 								*busPacket = queue[i];
 								queue.erase(queue.begin()+i);
@@ -442,11 +454,17 @@ bool CommandQueue::pop(BusPacket **busPacket)
 						if (isIssuable(packet))
 						{
 							//check for dependencies
+							///data dependancy check
 							bool dependencyFound = false;
 							for (size_t j=0;j<i;j++)
 							{
 								BusPacket *prevPacket = queue[j];
-								///the (== ACTIVATE) condition we had for the closed-row plolicy is not needed with open-row policy
+								if (prevPacket->busPacketType == ACTIVATE && prevPacket->physicalAddress == PARA_ACT_PACKET_PHYSADDR & prevPacket->bank == packet->bank &&
+									prevPacket->row == packet->row)
+								{
+									printf("this could affect performance hmmmm\n");
+									exit(0);
+								}
 								if (prevPacket->busPacketType != ACTIVATE &&
 										prevPacket->bank == packet->bank &&
 										prevPacket->row == packet->row)
@@ -458,19 +476,17 @@ bool CommandQueue::pop(BusPacket **busPacket)
 							if (dependencyFound) continue;
 
 							*busPacket = packet;
-
 							//if the bus packet before is an activate, that is the act that was
 							//	paired with the column access we are removing, so we have to remove
 							//	that activate as well (check i>0 because if i==0 then theres nothing before it)
 							///isIssuable checks if the row is open, so we can assume that the row is open
-							if (i>0 && queue[i-1]->busPacketType == ACTIVATE)
+							if (i > 0 && queue[i - 1]->busPacketType == ACTIVATE && !(queue[i - 1]->physicalAddress == PARA_ACT_PACKET_PHYSADDR))
 							{
-								rowAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
-								// i is being returned, but i-1 is being thrown away, so must delete it here 
-								delete (queue[i-1]);
+								// i is being returned, but i-1 is being thrown away, so must delete it here
+								delete (queue[i - 1]);
 
 								// remove both i-1 (the activate) and i (we've saved the pointer in *busPacket)
-								queue.erase(queue.begin()+i-1,queue.begin()+i+1);
+								queue.erase(queue.begin() + i - 1, queue.begin() + i + 1);
 							}
 							else // there's no activate before this packet
 							{
@@ -478,6 +494,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 								queue.erase(queue.begin()+i);
 							}
 
+							rowAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
 							foundIssuable = true;
 							break;
 						}
@@ -542,6 +559,35 @@ bool CommandQueue::pop(BusPacket **busPacket)
 								sendingPRE = true;
 								rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
 								*busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
+	
+								///printf("PRE: sending PRE command for rank %d bank %d\n", nextRankPRE, nextBankPRE);
+								if (PARA_ENABLE)
+								{        
+
+									int rng = std::rand() % (int)(1 / PARA_PROBABILITY);
+									printf("PARA: rng = %d, nextRankPRE = %d, nextBankPRE = %d\n", rng, nextRankPRE, nextBankPRE);
+									
+									if (rng == 0)
+									{
+										int openRow = bankStates[nextRankPRE][nextBankPRE].openRowAddress;
+										int coinflip_rng = std::rand() % 2;
+										for (int i = 1; openRow + i < NUM_ROWS && i <= PARA_NEIGHBORS; i++)
+										{
+											int rowSel=coinflip_rng ? openRow+i : openRow-i;
+											BusPacket *ACTcommand = new BusPacket(ACTIVATE, PARA_ACT_PACKET_PHYSADDR, 0,
+																				  rowSel, nextRankPRE, nextBankPRE, 0, dramsim_log);
+											queue.insert(queue.begin(), ACTcommand);
+
+											if (PARA_FORCE_IMM_PRECHARGE)
+											{
+												BusPacket *PREcommand = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
+												queue.insert(queue.begin() + 1, PREcommand);
+											}
+											if(DEBUG_PARA)
+												printf("PARA: inserting ACT command for row %d rank %d, bank %d qSize= %d\n", rowSel, nextRankPRE, nextBankPRE, queue.size());
+										}
+									}
+								}
 								break;
 							}
 						}

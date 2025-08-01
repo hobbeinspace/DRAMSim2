@@ -121,8 +121,15 @@ bool DEBUG_BANKSTATE;
 bool DEBUG_BUS;
 bool DEBUG_BANKS;
 bool DEBUG_POWER;
+bool DEBUG_RANK;
 bool USE_LOW_POWER;
 bool VIS_FILE_OUTPUT;
+
+bool PARA_ENABLE;
+float PARA_PROBABILITY;
+unsigned PARA_NEIGHBORS;
+bool PARA_FORCE_IMM_PRECHARGE;
+bool DEBUG_PARA;
 
 bool VERIFICATION_OUTPUT;
 
@@ -204,8 +211,15 @@ static ConfigMap configMap[] =
 	DEFINE_BOOL_PARAM(DEBUG_BUS,SYS_PARAM),
 	DEFINE_BOOL_PARAM(DEBUG_BANKS,SYS_PARAM),
 	DEFINE_BOOL_PARAM(DEBUG_POWER,SYS_PARAM),
+	DEFINE_BOOL_PARAM(DEBUG_RANK,SYS_PARAM),
 	DEFINE_BOOL_PARAM(VIS_FILE_OUTPUT,SYS_PARAM),
 	DEFINE_BOOL_PARAM(VERIFICATION_OUTPUT,SYS_PARAM),
+
+	DEFINE_BOOL_PARAM(PARA_ENABLE,SYS_PARAM),
+	DEFINE_FLOAT_PARAM(PARA_PROBABILITY,SYS_PARAM),
+	DEFINE_UINT_PARAM(PARA_NEIGHBORS,SYS_PARAM),
+	DEFINE_BOOL_PARAM(PARA_FORCE_IMM_PRECHARGE,SYS_PARAM),
+	DEFINE_BOOL_PARAM(DEBUG_PARA,SYS_PARAM),
 	{"", NULL, UINT, SYS_PARAM, false} // tracer value to signify end of list; if you delete it, epic fail will result
 };
 
@@ -639,6 +653,24 @@ void IniReader::InitEnumsFromStrings()
 		cout << "WARNING: Unknown scheduling policy '"<<SCHEDULING_POLICY<<"'; valid options are 'rank_then_bank_round_robin' or 'bank_then_rank_round_robin'; defaulting to Bank Then Rank Round Robin" << endl;
 		schedulingPolicy = BankThenRankRoundRobin;
 	}
+
+	if(PARA_ENABLE)
+	{
+		if (DEBUG_INI_READER)
+		{
+
+			std::cout << "PARA_ENABLE is set to true" << std::endl;
+			std::cout << "PARA_PROBABILITY is set to " << PARA_PROBABILITY << std::endl;
+		}
+	}
+	else
+	{
+		if(DEBUG_INI_READER)
+		{
+			std::cout << "PARA_ENABLE is set to false" << std::endl;
+		}
+	}
+
 
 }
 

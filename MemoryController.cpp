@@ -582,8 +582,9 @@ void MemoryController::update()
 
 
 			///issue ACT and CAS to access data.
-			///what if the row is already open? (only happens in open page policy)
-			///->this is handed by the CommandQueue::isIssuable() check
+			///what if the row is already open? (only happens in open page policy) : the ACT command will be ignored by 
+			///the command queue
+			///->this is handled by the CommandQueue::isIssuable() check 
 			/*
 			if(isIssuable(packet)){
 			...

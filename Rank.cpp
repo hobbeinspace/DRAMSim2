@@ -94,6 +94,7 @@ void Rank::receiveFromBus(BusPacket *packet) //called by MemoryController::updat
 	switch (packet->busPacketType)
 	{
 	case READ:
+		if(DEBUG_RANK) printf("Rank::receiveFromBus: READ command received rank %d bank %d row %d\n", packet->rank, packet->bank,packet->row);
 		//make sure a read is allowed
 		if (bankStates[packet->bank].currentBankState != RowActive || /// read is allowed in a bank if 1. a row is open for access AND
 		        currentClockCycle < bankStates[packet->bank].nextRead || ///timing constraint allows read access AND
@@ -135,6 +136,7 @@ void Rank::receiveFromBus(BusPacket *packet) //called by MemoryController::updat
 		readReturnCountdown.push_back(RL);
 		break;
 	case READ_P:
+		if(DEBUG_RANK) printf("Rank::receiveFromBus: READ_P command received rank %d bank %d row %d\n",packet->rank, packet->bank,packet->row);
 		//make sure a read is allowed
 		if (bankStates[packet->bank].currentBankState != RowActive ||
 		        currentClockCycle < bankStates[packet->bank].nextRead ||
@@ -166,6 +168,7 @@ void Rank::receiveFromBus(BusPacket *packet) //called by MemoryController::updat
 		readReturnCountdown.push_back(RL);
 		break;
 	case WRITE:
+		if(DEBUG_RANK) printf("Rank::receiveFromBus: WRITE command received rank %d bank %d row %d\n",packet->rank, packet->bank,packet->row);
 		//make sure a write is allowed
 		///same as case READ except we check for the nextWrite timing
 		if (bankStates[packet->bank].currentBankState != RowActive ||
@@ -196,6 +199,7 @@ void Rank::receiveFromBus(BusPacket *packet) //called by MemoryController::updat
 		delete(packet);
 		break;
 	case WRITE_P:
+		if(DEBUG_RANK) printf("Rank::receiveFromBus: WRITE_P command received rank %d bank %d row %d\n",packet->rank, packet->bank,packet->row);
 		//make sure a write is allowed
 		if (bankStates[packet->bank].currentBankState != RowActive ||
 		        currentClockCycle < bankStates[packet->bank].nextWrite ||
@@ -223,6 +227,7 @@ void Rank::receiveFromBus(BusPacket *packet) //called by MemoryController::updat
 		delete(packet);
 		break;
 	case ACTIVATE:
+		if(DEBUG_RANK) printf("Rank::receiveFromBus: ACTIVATE command received rank %d bank %d row %d\n",packet->rank, packet->bank,packet->row);
 		//make sure activate is allowed
 		///check if rows are closed + check if it meets timing constraint
 		if (bankStates[packet->bank].currentBankState != Idle ||
@@ -263,6 +268,8 @@ void Rank::receiveFromBus(BusPacket *packet) //called by MemoryController::updat
 		delete(packet); 
 		break;
 	case PRECHARGE:
+		if(DEBUG_RANK)
+			printf("Rank::receiveFromBus: PRECHARGE command received rank %d bank %d\n",packet->rank, packet->bank);
 		//make sure precharge is allowed
 		///check to make sure a row is not active before PRECHARGE + check if it meets timing constraint
 		if (bankStates[packet->bank].currentBankState != RowActive ||

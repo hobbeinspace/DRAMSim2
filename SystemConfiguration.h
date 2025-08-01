@@ -68,8 +68,15 @@ extern bool DEBUG_BANKSTATE;
 extern bool DEBUG_BUS;
 extern bool DEBUG_BANKS;
 extern bool DEBUG_POWER;
+extern bool DEBUG_RANK; 
 extern bool USE_LOW_POWER;
 extern bool VIS_FILE_OUTPUT;
+
+extern bool PARA_ENABLE;
+extern float PARA_PROBABILITY;
+extern unsigned PARA_NEIGHBORS;
+extern bool PARA_FORCE_IMM_PRECHARGE;
+extern bool DEBUG_PARA;
 
 extern uint64_t TOTAL_STORAGE;
 extern unsigned NUM_BANKS;
