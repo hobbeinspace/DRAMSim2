@@ -26,9 +26,9 @@ USE_LOW_POWER=true 					; go into low power mode when idle?
 VERIFICATION_OUTPUT=false 			; should be false for normal operation
 TOTAL_ROW_ACCESSES=4	; 				maximum number of open page requests to send to the same row before forcing a row close (to prevent starvation)
 
-PARA_ENABLE=true
-PARA_PROBABILITY=0.005
+PARA_ENABLE=false
+PARA_PROBABILITY=0.5
 PARA_NEIGHBORS=1
 PARA_FORCE_IMM_PRECHARGE=false         ; if set, immediately precharge a row that was activated for refresh instead of allowing data access commands to interpose between the ACT and PRE pair intended for row-specific refresh
 
-DEBUG_PARA=false;
+DEBUG_PARA=true;

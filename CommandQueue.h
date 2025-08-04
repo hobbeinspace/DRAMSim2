@@ -46,6 +46,7 @@
 #include "Transaction.h"
 #include "SystemConfiguration.h"
 #include "SimulatorObject.h"
+#include <random>
 
 using namespace std;
 
@@ -93,8 +94,8 @@ private:
 
 	vector< vector<unsigned> > tFAWCountdown;
 	vector< vector<unsigned> > rowAccessCounters;
-
 	bool sendAct;
+	int num_para_refreshes=0;
 };
 }
 
