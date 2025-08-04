@@ -46,6 +46,7 @@
 #include <stdlib.h> 
 #include <ctime>
 #include <unistd.h>
+#include <random>
 
 #define PARA_ACT_PACKET_PHYSADDR 99
 using namespace DRAMSim;
@@ -99,6 +100,9 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
 		queues.push_back(perBankQueue);
 	}
 
+		
+	std::random_device rd; //for PARA rng
+	std::mt19937 gen(rd());
 
 	//FOUR-bank activation window
 	//	this will count the number of activations within a given window
@@ -184,8 +188,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
 
 	///four bank activation window, in cycles
 
-
-	std::srand(std::time(nullptr)); //for PARA
 	for (size_t i=0;i<NUM_RANKS;i++)
 	{
 		//decrement all the counters we have going
@@ -563,9 +565,9 @@ bool CommandQueue::pop(BusPacket **busPacket)
 								///printf("PRE: sending PRE command for rank %d bank %d\n", nextRankPRE, nextBankPRE);
 								if (PARA_ENABLE)
 								{        
-
-									int rng = std::rand() % (int)(1 / PARA_PROBABILITY);
-									printf("PARA: rng = %d, nextRankPRE = %d, nextBankPRE = %d\n", rng, nextRankPRE, nextBankPRE);
+									int rng= std::uniform_int_distribution<> dis(0, (int)(1 / PARA_PROBABILITY))-1;
+									if(DEBUG_PARA)
+										printf("PARA: rng = %d, nextRankPRE = %d, nextBankPRE = %d\n", rng, nextRankPRE, nextBankPRE);
 									
 									if (rng == 0)
 									{
