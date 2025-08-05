@@ -482,7 +482,7 @@ void MemoryController::update()
 				{
 					int rng = rand() % (int)(1 / PARA_PROBABILITY);
 					if (DEBUG_PARA)
-						// printf("PARA: rng = %d, nextRankPRE = %d, nextBankPRE = %d\n", rng, nextRankPRE, nextBankPRE);
+						printf("PARA: rng = %d, nextRankPRE = %d, nextBankPRE = %d\n", rng, rank, bank);
 
 						if (rng == 0)
 						{
@@ -492,6 +492,14 @@ void MemoryController::update()
 							for (int i = 1; openRow + i < NUM_ROWS && i <= PARA_NEIGHBORS; i++)
 							{
 								int rowSel = coinflip_rng ? openRow + i : openRow - i;
+								if(rowSel<0)
+								{
+									rowSel=openRow+i;
+								}
+								else if(rowSel>=NUM_ROWS)
+								{
+									rowSel=openRow-i;
+								}
 								BusPacket *ACTcommand = new BusPacket(ACTIVATE, PARA_ACT_PACKET_PHYSADDR, 0,
 																	  rowSel, rank, bank, 0, dramsim_log);
 								vector<BusPacket *> &queue = commandQueue.getCommandQueue(rank,bank);

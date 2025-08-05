@@ -31,4 +31,4 @@ PARA_PROBABILITY=0.005
 PARA_NEIGHBORS=1
 PARA_FORCE_IMM_PRECHARGE=false         ; if set, immediately precharge a row that was activated for refresh instead of allowing data access commands to interpose between the ACT and PRE pair intended for row-specific refresh
 
-DEBUG_PARA=true;
+DEBUG_PARA=false;
