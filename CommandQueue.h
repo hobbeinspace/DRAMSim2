@@ -95,7 +95,6 @@ private:
 	vector< vector<unsigned> > tFAWCountdown;
 	vector< vector<unsigned> > rowAccessCounters;
 	bool sendAct;
-	int num_para_refreshes=0;
 };
 }
 

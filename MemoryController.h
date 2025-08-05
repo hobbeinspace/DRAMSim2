@@ -47,6 +47,8 @@
 #include "CSVWriter.h"
 #include <map>
 
+#define PARA_ACT_PACKET_PHYSADDR 0xDEADBEEF
+
 using namespace std;
 
 namespace DRAMSim
@@ -122,6 +124,8 @@ private:
 
 
 	unsigned refreshRank;
+
+	int num_para_refreshes=0;
 	
 public:
 	// energy values are per rank -- SST uses these directly, so make these public 

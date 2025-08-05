@@ -47,7 +47,6 @@
 #include <ctime>
 #include <unistd.h>
 
-#define PARA_ACT_PACKET_PHYSADDR 0xDEADBEEF
 using namespace DRAMSim;
 #define DEBUG_PARA_PRINT(str) if(DEBUG_PARA) {std::cout<<str<<std::endl;}
 CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim_log_) :
@@ -98,7 +97,6 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
 		}
 		queues.push_back(perBankQueue);
 	}
-	srand ( time(NULL) );
 	//FOUR-bank activation window
 	//	this will count the number of activations within a given window
 	//	(decrementing counter)
@@ -459,7 +457,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 							//stall until we can get the PARA refresh (act) packet through
 							if(isIssuable(packet)){
 								*busPacket = packet;
-								///rowAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
+								rowAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
 								foundIssuable = true;
 								queue.erase(queue.begin() + i);
 								if(DEBUG_PARA)
@@ -582,36 +580,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
 								*busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
 	
 								///printf("PRE: sending PRE command for rank %d bank %d\n", nextRankPRE, nextBankPRE);
-								if (PARA_ENABLE)
-								{        
-									int rng= rand() % (int)(1/PARA_PROBABILITY);
-									if(DEBUG_PARA)
-										//printf("PARA: rng = %d, nextRankPRE = %d, nextBankPRE = %d\n", rng, nextRankPRE, nextBankPRE);
-									
-									if (rng == 0)
-									{
-										num_para_refreshes++;
-										int openRow = bankStates[nextRankPRE][nextBankPRE].openRowAddress;
-										int coinflip_rng = std::rand() % 2;
-										for (int i = 1; openRow + i < NUM_ROWS && i <= PARA_NEIGHBORS; i++)
-										{
-											int rowSel=coinflip_rng ? openRow+i : openRow-i;
-											BusPacket *ACTcommand = new BusPacket(ACTIVATE, PARA_ACT_PACKET_PHYSADDR, 0,
-																				  rowSel, nextRankPRE, nextBankPRE, 0, dramsim_log);
-											queue.insert(queue.begin(), ACTcommand);
-
-											if (PARA_FORCE_IMM_PRECHARGE)
-											{
-												BusPacket *PREcommand = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
-												queue.insert(queue.begin() + 1, PREcommand);
-											}
-											if(DEBUG_PARA)
-											{
-												printf("PARA: inserting ACT command for row %d rank %d, bank %d qSize= %d\n%d refreshes inserted\n", rowSel, nextRankPRE, nextBankPRE, queue.size(),num_para_refreshes);
-											}
-										}
-									}
-								}
 								break;
 							}
 						}
@@ -621,7 +589,10 @@ bool CommandQueue::pop(BusPacket **busPacket)
 				while (!(startingRank == nextRankPRE && startingBank == nextBankPRE));
 
 				//if no PREs could be sent, just return false
-				if (!sendingPRE) return false;
+				if (!sendingPRE) 
+				{
+					return false;
+				}
 			}
 		}
 	}
@@ -647,7 +618,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
 	{
 		tFAWCountdown[(*busPacket)->rank].push_back(tFAW);
 	}
-
 	return true;
 }
 
